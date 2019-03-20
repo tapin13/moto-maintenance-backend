@@ -16,7 +16,7 @@ app.use(cors('*'));
 let users = [
     { username: 'admin', password: 'admin' },
     { username: 'user', password: 'user' },
-    { username: 'papa', password: 'papa' },
+    { username: 'papa', password: 'papa1' },
 ];
 
 app.post('/api/login', (request, response) => {
