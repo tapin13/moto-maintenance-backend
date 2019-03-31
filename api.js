@@ -7,14 +7,18 @@ const cors = require('cors');
 
 const mysql = require('mysql');
 const crypto = require('crypto');
+const util = require('util');
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
     host     : process.env.DB_HOST,
     user     : process.env.DB_USER,
     password : process.env.DB_PASSWORD,
-    database : process.env.DB_DATABASE
+    database : process.env.DB_DATABASE,
+    connectionLimit: process.env.DB_CONNECTION_LIMIT
 });
-db.connect();
+//db.connect();
+
+db.query = util.promisify(db.query);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -183,20 +187,68 @@ app.post('/api/maintenance/add/', (request, response) => {
         responseObject.data = { id: rows.insertId };
         response.send(JSON.stringify(responseObject));
     });
-
-
-        //[ request.body.title, request.body.date, request.body.distance, request.body.price ],
-        // (err) => {
-        //     if(err) {
-        //         console.log(err);
-        //     }
-        //     console.log(`db INSERT INTO - success`);
-
-        //     responseObject.status = 200;
-        //     response.send(JSON.stringify(responseObject));
-        // }
-    // );
 });
+
+async function token2userId(token) {
+    let sql = "SELECT `user_id` FROM `tokens` WHERE `token` = ? ;";
+    let data = [ token ];
+    let result;
+
+    try {
+        result = await db.query(sql, data);
+    } catch(err) {
+        console.log('error: ', err);
+        //return;        
+    }
+    console.log(result);
+
+    return result[0].user_id
+}
+
+app.post('/api/vehicles/', async (request, response) => {
+    console.log(request.body);
+    let responseObject = { ...defaultResponseObject };
+
+    console.log(`post`, request.body.token);
+    const userId = token2userId(request.body.token);
+
+    let sql = "SELECT `id`, `title` FROM `vehicles` WHERE `user_id` = ? ;";
+    let data = [ userId ];
+    let rows;
+
+    try {
+        rows = await db.query(sql, data);
+    } catch(err) {
+        console.log('error: ', err);
+        responseObject.error = err;
+        response.send(JSON.stringify(responseObject));
+
+        return;        
+    }
+    console.log(rows);
+
+    responseObject.status = 200;
+    responseObject.data = rows;
+    response.send(JSON.stringify(responseObject));
+
+
+    // db.query(sql, data,(err, rows) => {
+    //     if(err) {
+    //         console.log('error: ', err);
+    //         responseObject.error = err;
+    //         response.send(JSON.stringify(responseObject));
+
+    //         return;
+    //     }
+    //     console.log(`db: `, rows);
+
+    //     responseObject.status = 200;
+    //     responseObject.data = { id: rows.insertId };
+    //     response.send(JSON.stringify(responseObject));
+    // });
+});
+
+
 
 app.listen(port, () => console.log(`Listening on port ${port}`));
 
