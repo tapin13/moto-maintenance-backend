@@ -166,8 +166,9 @@ app.post('/api/maintenance/add/', (request, response) => {
     console.log(request.body);
     let responseObject = { ...defaultResponseObject };
 
-    let sql = "INSERT INTO `maintenances` (`title`, `date`, `distance`, `price`) VALUES (?,?,?,?)";
+    let sql = "INSERT INTO `maintenances` (`vehicle_id`, `title`, `date`, `distance`, `price`) VALUES (?,?,?,?,?)";
     let data = [
+        request.body.vehicleId,
         request.body.title,
         request.body.date,
         request.body.distance,
@@ -210,10 +211,12 @@ app.post('/api/vehicles/', async (request, response) => {
     let responseObject = { ...defaultResponseObject };
 
     console.log(`post`, request.body.token);
-    const userId = token2userId(request.body.token);
+    const userId = await token2userId(request.body.token);
 
     let sql = "SELECT `id`, `title` FROM `vehicles` WHERE `user_id` = ? ;";
     let data = [ userId ];
+    console.log(`data`, data);
+
     let rows;
 
     try {
