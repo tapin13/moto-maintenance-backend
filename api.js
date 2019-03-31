@@ -1,3 +1,5 @@
+'use strict';
+
 const dotenv = require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -7,10 +9,10 @@ const mysql = require('mysql');
 const crypto = require('crypto');
 
 const db = mysql.createConnection({
-    host     : 'localhost',
-    user     : 'root',
-    password : 'root',
-    database : 'moto'
+    host     : process.env.DB_HOST,
+    user     : process.env.DB_USER,
+    password : process.env.DB_PASSWORD,
+    database : process.env.DB_DATABASE
 });
 db.connect();
 
@@ -21,6 +23,13 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors('*'));
 
+const defaultResponseObject = {
+    status: 400, 
+    error: "",
+    data: null
+};
+
+
 app.get('/', (req, res) => {
   res.send({ hello: 'Welcome to API' });
 });
@@ -30,23 +39,22 @@ app.post('/api/register/', (request, response) => {
     // requestObject = JSON.parse(req.json);
     console.log(requestObject.email);
 
-    responseObject = {
-        status: 400,
-        error: "",
-        data: null        
-    };
+    let responseObject = { ...defaultResponseObject };
 
     if(!requestObject.email || requestObject.password) {
         responseObject.status = 400;
     }
 
-    let sql = `INSERT INTO \`users\` (\`email\`, \`password\`) VALUES ('${requestObject.email}', MD5('${requestObject.password}${process.env.SALT}'))`;
+    let sql = `INSERT INTO \`users\` (\`email\`, \`password\`) VALUES ('${requestObject.email}', MD5('${requestObject.password}${process.env.MD5_SALT}'))`;
     console.log(sql);
-    db.query(sql, (error, results, fields) => {
+    db.query(sql, (error, results) => {
         if (error) {
             //throw error;
             responseObject.status = 400;
             responseObject.error = error;
+            response.send(JSON.stringify(responseObject));    
+
+            return;
         }
         //console.log('The solution is: ', results);
 
@@ -61,11 +69,7 @@ app.post('/api/login', (request, response) => {
     // requestObject = JSON.parse(req.json);
     console.log(requestObject.email);
 
-    responseObject = {
-        status: 400,
-        error: '',
-        data: null
-    };
+    let responseObject = { ...defaultResponseObject };
 
     if(!requestObject.email || requestObject.password) {
         responseObject.status = 400;
@@ -76,7 +80,7 @@ app.post('/api/login', (request, response) => {
         //     requestObject.email === user.email && requestObject.password === user.password
         // );
 
-        let sql = `SELECT * FROM \`users\` WHERE \`email\` = '${requestObject.email}' AND \`password\` = MD5('${requestObject.password}${process.env.SALT}') LIMIT 1`;
+        let sql = `SELECT * FROM \`users\` WHERE \`email\` = '${requestObject.email}' AND \`password\` = MD5('${requestObject.password}${process.env.MD5_SALT}') LIMIT 1`;
         console.log(sql);
         db.query(sql, (error, results) => {
             if (error) {
@@ -101,10 +105,10 @@ app.post('/api/login', (request, response) => {
             if(results && results[0] && results[0].id) {
                 //responseObject.data = results[0].id;
 
-                let token = crypto.createHash('md5').update(`${Math.random()}${process.env.SALT}`).digest("hex");
+                let token = crypto.createHash('md5').update(`${Math.random()}${process.env.MD5_SALT}`).digest("hex");
                 let sql = `INSERT INTO \`tokens\` (\`user_id\`, \`token\`, \`timestamp\`) VALUES ('${results[0].id}', '${token}', UNIX_TIMESTAMP())`;
                 console.log(sql);
-                db.query(sql, (error, results, fields) => {
+                db.query(sql, (error, results) => {
                     if (error) {
                         //throw error;
                         responseObject.status = 400;
@@ -137,13 +141,15 @@ app.post('/api/login', (request, response) => {
 
 app.post('/api/maintenances/', (request, response) => {
     console.log(request.body);
-    responseObject = {
-        status: 400
-    };
+    let responseObject = { ...defaultResponseObject };
 
     db.query('SELECT * FROM `maintenances`', [],(err, rows) => {
         if(err) {
-            console.log(err);
+            console.log('error: ', err);
+            responseObject.error = err;
+            response.send(JSON.stringify(responseObject));
+
+            return;
         }
         console.log(`db SELECT - success`, rows);
         responseObject.status = 200;
@@ -152,25 +158,44 @@ app.post('/api/maintenances/', (request, response) => {
     });
 });
 
-app.post('/api/task/add', (request, response) => {
+app.post('/api/maintenance/add/', (request, response) => {
     console.log(request.body);
-    responseObject = {
-        status: 400
-    };
+    let responseObject = { ...defaultResponseObject };
 
-    db.run(
-        'INSERT INTO `maintenances` (`title`, `distance`, `price`) VALUES (?,?,?)',
-        [ request.body.title, request.body.distance, request.body.price ],
-        (err) => {
-            if(err) {
-                console.log(err);
-            }
-            console.log(`db INSERT INTO - success`);
-
-            responseObject.status = 200;
+    let sql = "INSERT INTO `maintenances` (`title`, `date`, `distance`, `price`) VALUES (?,?,?,?)";
+    let data = [
+        request.body.title,
+        request.body.date,
+        request.body.distance,
+        request.body.price,
+    ];
+    db.query(sql, data,(err, rows) => {
+        if(err) {
+            console.log('error: ', err);
+            responseObject.error = err;
             response.send(JSON.stringify(responseObject));
+
+            return;
         }
-    );
+        console.log(`db: `, rows);
+
+        responseObject.status = 200;
+        responseObject.data = { id: rows.insertId };
+        response.send(JSON.stringify(responseObject));
+    });
+
+
+        //[ request.body.title, request.body.date, request.body.distance, request.body.price ],
+        // (err) => {
+        //     if(err) {
+        //         console.log(err);
+        //     }
+        //     console.log(`db INSERT INTO - success`);
+
+        //     responseObject.status = 200;
+        //     response.send(JSON.stringify(responseObject));
+        // }
+    // );
 });
 
 app.listen(port, () => console.log(`Listening on port ${port}`));
