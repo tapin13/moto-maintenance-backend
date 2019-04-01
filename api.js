@@ -67,7 +67,7 @@ app.post('/api/register/', (request, response) => {
     });
 });
 
-app.post('/api/login', (request, response) => {
+app.post('/api/login/', (request, response) => {
     console.log(request.body);
     let requestObject = request.body;
     // requestObject = JSON.parse(req.json);
@@ -77,68 +77,70 @@ app.post('/api/login', (request, response) => {
 
     if(!requestObject.email || requestObject.password) {
         responseObject.status = 400;
+        responseObject.error = `Login or password empty`;
+        response.send(JSON.stringify(responseObject));
+                
+        return;
     }
 
-    if(requestObject.email && requestObject.password) {
-        // let found =  users.filter(user => 
-        //     requestObject.email === user.email && requestObject.password === user.password
-        // );
+    // let found =  users.filter(user => 
+    //     requestObject.email === user.email && requestObject.password === user.password
+    // );
 
-        let sql = `SELECT * FROM \`users\` WHERE \`email\` = '${requestObject.email}' AND \`password\` = MD5('${requestObject.password}${process.env.MD5_SALT}') LIMIT 1`;
-        console.log(sql);
-        db.query(sql, (error, results) => {
-            if (error) {
-                //throw error;
-                responseObject.status = 400;
-                responseObject.error = error;
-                console.log('error: ', error);
-            }
-            //console.log('results: ', results);
+    let sql = `SELECT * FROM \`users\` WHERE \`email\` = '${requestObject.email}' AND \`password\` = MD5('${requestObject.password}${process.env.MD5_SALT}') LIMIT 1`;
+    console.log(sql);
+    db.query(sql, (error, results) => {
+        if (error) {
+            //throw error;
+            responseObject.status = 400;
+            responseObject.error = error;
+            console.log('error: ', error);
+        }
+        //console.log('results: ', results);
 
-            if(results.length === 0) {
-                responseObject.status = 400;
-                responseObject.error = `Login or password not correct`;
-                response.send(JSON.stringify(responseObject));
+        if(results.length === 0) {
+            responseObject.status = 400;
+            responseObject.error = `Login or password not correct`;
+            response.send(JSON.stringify(responseObject));
+            
+            return;
+        }
+
+        console.log('results RowDataPacket: ', results[0].id);
+        //console.log('results RowDataPacket id: ', results[0]['RowDataPacket']['id']);
+
+        if(results && results[0] && results[0].id) {
+            //responseObject.data = results[0].id;
+
+            let token = crypto.createHash('md5').update(`${Math.random()}${process.env.MD5_SALT}`).digest("hex");
+            let sql = `INSERT INTO \`tokens\` (\`user_id\`, \`token\`, \`timestamp\`) VALUES ('${results[0].id}', '${token}', UNIX_TIMESTAMP())`;
+            console.log(sql);
+            db.query(sql, (error, results) => {
+                if (error) {
+                    //throw error;
+                    responseObject.status = 400;
+                    responseObject.error = error;
+                    response.send(JSON.stringify(responseObject));
+
+                    return;
+                }
+                //console.log('The solution is: ', results);
+
                 
-                return;
-            }
-
-            console.log('results RowDataPacket: ', results[0].id);
-            //console.log('results RowDataPacket id: ', results[0]['RowDataPacket']['id']);
-
-            if(results && results[0] && results[0].id) {
-                //responseObject.data = results[0].id;
-
-                let token = crypto.createHash('md5').update(`${Math.random()}${process.env.MD5_SALT}`).digest("hex");
-                let sql = `INSERT INTO \`tokens\` (\`user_id\`, \`token\`, \`timestamp\`) VALUES ('${results[0].id}', '${token}', UNIX_TIMESTAMP())`;
-                console.log(sql);
-                db.query(sql, (error, results) => {
-                    if (error) {
-                        //throw error;
-                        responseObject.status = 400;
-                        responseObject.error = error;
-                        response.send(JSON.stringify(responseObject));
-
-                        return;
-                    }
-                    //console.log('The solution is: ', results);
-
-                    
-                    responseObject.status = 200;
-                    responseObject.data = { token: token };
-                    response.send(JSON.stringify(responseObject));    
-                });
-                
-            } else {
-                responseObject.status = 400;
+                responseObject.status = 200;
+                responseObject.data = { token: token };
                 response.send(JSON.stringify(responseObject));    
-            }
-        });
+            });
+            
+        } else {
+            responseObject.status = 400;
+            response.send(JSON.stringify(responseObject));    
+        }
+    });
 
-        //console.log(`found`, found);
-        
-        //responseObject.status = Array.isArray(found) && found.length ? 200 : 400;
-    }
+    //console.log(`found`, found);
+    
+    //responseObject.status = Array.isArray(found) && found.length ? 200 : 400;
 
     //response.send(JSON.stringify(responseObject));
 });
