@@ -75,7 +75,7 @@ app.post('/api/login/', (request, response) => {
 
     let responseObject = { ...defaultResponseObject };
 
-    if(!requestObject.email || requestObject.password) {
+    if(!requestObject.email || !requestObject.password) {
         responseObject.status = 400;
         responseObject.error = `Login or password empty`;
         response.send(JSON.stringify(responseObject));
@@ -145,11 +145,19 @@ app.post('/api/login/', (request, response) => {
     //response.send(JSON.stringify(responseObject));
 });
 
-app.post('/api/maintenances/', (request, response) => {
+app.post('/api/maintenances/', async(request, response) => {
     console.log(request.body);
     let responseObject = { ...defaultResponseObject };
 
-    db.query('SELECT * FROM `maintenances`', [],(err, rows) => {
+    const userId = await token2userId(request.body.token);
+
+    db.query(`SELECT 
+                * 
+                FROM
+                    \`users\`
+                    INNER JOIN \`vehicles\` ON (\`vehicles\`.\`user_id\` = \`users\`.\`id\`)
+                    INNER JOIN \`maintenances\` ON (\`maintenances\`.\`vehicle_id\` = \`vehicles\`.\`id\`)
+                WHERE \`users\`.\`id\` = ?`, [ userId ],(err, rows) => {
         if(err) {
             console.log('error: ', err);
             responseObject.error = err;
