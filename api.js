@@ -176,13 +176,14 @@ app.post('/api/maintenance/add/', (request, response) => {
     console.log(request.body);
     let responseObject = { ...defaultResponseObject };
 
-    let sql = "INSERT INTO `maintenances` (`vehicle_id`, `title`, `date`, `distance`, `price`) VALUES (?,?,?,?,?)";
+    let sql = "INSERT INTO `maintenances` (`vehicle_id`, `title`, `date`, `distance`, `price`, `notes`) VALUES (?,?,?,?,?,?)";
     let data = [
         request.body.vehicleId,
         request.body.title,
         request.body.date,
         request.body.distance,
         request.body.price,
+        request.body.notes,
     ];
     db.query(sql, data,(err, rows) => {
         if(err) {
