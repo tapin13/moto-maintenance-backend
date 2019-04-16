@@ -41,7 +41,7 @@ const hello = (req, res) => {
     res.send({ hello: 'Welcome to API' });
 };
 
-const register = (request, response) => {
+const register = async (request, response) => {
     let requestObject = request.body;
     // requestObject = JSON.parse(req.json);
     console.log(requestObject.email);
@@ -54,20 +54,18 @@ const register = (request, response) => {
 
     let sql = `INSERT INTO \`users\` (\`email\`, \`password\`) VALUES ('${requestObject.email}', MD5('${requestObject.password}${process.env.MD5_SALT}'))`;
     console.log(sql);
-    db.query(sql, (error, results) => {
-        if (error) {
-            //throw error;
-            responseObject.status = 400;
-            responseObject.error = error;
-            response.send(JSON.stringify(responseObject));    
 
-            return;
-        }
-        //console.log('The solution is: ', results);
+    try {
+        let result = await db.query(sql);
+        console.log(`result`, result);
 
         responseObject.status = 200;
-        response.send(JSON.stringify(responseObject));    
-    });
+    } catch (err) {
+        responseObject.status = 400;
+        responseObject.error = err;
+    }
+
+    response.send(JSON.stringify(responseObject));    
 };
 
 const login = (request, response) => {
@@ -140,12 +138,6 @@ const login = (request, response) => {
             response.send(JSON.stringify(responseObject));    
         }
     });
-
-    //console.log(`found`, found);
-    
-    //responseObject.status = Array.isArray(found) && found.length ? 200 : 400;
-
-    //response.send(JSON.stringify(responseObject));
 };
 
 const maintenances = async(request, response) => {
