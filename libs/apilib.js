@@ -43,20 +43,24 @@ const hello = (req, res) => {
 
 const register = async (request, response) => {
     let requestObject = request.body;
-    // requestObject = JSON.parse(req.json);
-    console.log(requestObject.email);
+    console.log(`register`, requestObject);
 
     let responseObject = { ...defaultResponseObject };
 
-    if(!requestObject.email || requestObject.password) {
+    if(!requestObject.email || !requestObject.password) {
         responseObject.status = 400;
+        responseObject.error = 'Email or Password empty';
+
+        response.send(JSON.stringify(responseObject));
+        return;
     }
 
-    let sql = `INSERT INTO \`users\` (\`email\`, \`password\`) VALUES ('${requestObject.email}', MD5('${requestObject.password}${process.env.MD5_SALT}'))`;
-    console.log(sql);
+    let sql = `INSERT INTO \`users\` (\`email\`, \`password\`) VALUES (?, MD5(?))`;
+    let data = [ `${requestObject.email}`, `${requestObject.password}${process.env.MD5_SALT}` ];
+    console.log(sql, data);
 
     try {
-        let result = await db.query(sql);
+        let result = await db.query(sql, data);
         console.log(`result`, result);
 
         responseObject.status = 200;
@@ -65,16 +69,21 @@ const register = async (request, response) => {
         responseObject.error = err;
     }
 
-    response.send(JSON.stringify(responseObject));    
+    response.send(JSON.stringify(responseObject));
 };
 
-const login = (request, response) => {
+const login = async (request, response) => {
+    let responseObject = { ...defaultResponseObject };
+
+    if(!request || !request.body) {
+        return;
+    }
+
     console.log(request.body);
     let requestObject = request.body;
     // requestObject = JSON.parse(req.json);
-    console.log(requestObject.email);
+    // console.log(requestObject.email);
 
-    let responseObject = { ...defaultResponseObject };
 
     if(!requestObject.email || !requestObject.password) {
         responseObject.status = 400;
@@ -84,90 +93,95 @@ const login = (request, response) => {
         return;
     }
 
-    // let found =  users.filter(user => 
-    //     requestObject.email === user.email && requestObject.password === user.password
-    // );
-
     let sql = `SELECT * FROM \`users\` WHERE \`email\` = '${requestObject.email}' AND \`password\` = MD5('${requestObject.password}${process.env.MD5_SALT}') LIMIT 1`;
     console.log(sql);
-    db.query(sql, (error, results) => {
-        if (error) {
-            //throw error;
-            responseObject.status = 400;
-            responseObject.error = error;
-            console.log('error: ', error);
-        }
-        //console.log('results: ', results);
+    let results;
+    try {
+        results = await db.query(sql);
+    } catch(err) {
+        responseObject.status = 400;
+        responseObject.error = err;
+        console.log('error: ', err);
+        response.send(JSON.stringify(responseObject));
+        
+        return;
+    }
+    
+    if(results.length === 0) {
+        responseObject.status = 400;
+        responseObject.error = `Login or password not correct`;
+        response.send(JSON.stringify(responseObject));
+        
+        return;
+    }
 
-        if(results.length === 0) {
-            responseObject.status = 400;
-            responseObject.error = `Login or password not correct`;
-            response.send(JSON.stringify(responseObject));
-            
-            return;
-        }
+    console.log('results RowDataPacket: ', results[0].id);
 
-        console.log('results RowDataPacket: ', results[0].id);
-        //console.log('results RowDataPacket id: ', results[0]['RowDataPacket']['id']);
+    if(!results || !results[0] || !results[0].id) {
+        responseObject.status = 400;
+        response.send(JSON.stringify(responseObject));
+        return;
+    }
 
-        if(results && results[0] && results[0].id) {
-            //responseObject.data = results[0].id;
+    let token = crypto.createHash('md5').update(`${Math.random()}${process.env.MD5_SALT}`).digest("hex");
+    sql = `INSERT INTO \`tokens\` (\`user_id\`, \`token\`, \`timestamp\`) VALUES ('${results[0].id}', '${token}', UNIX_TIMESTAMP())`;
+    console.log(sql);
+    try {
+        results = await db.query(sql);
+    } catch (err) {
+        responseObject.status = 400;
+        responseObject.error = err;
+        response.send(JSON.stringify(responseObject));
 
-            let token = crypto.createHash('md5').update(`${Math.random()}${process.env.MD5_SALT}`).digest("hex");
-            let sql = `INSERT INTO \`tokens\` (\`user_id\`, \`token\`, \`timestamp\`) VALUES ('${results[0].id}', '${token}', UNIX_TIMESTAMP())`;
-            console.log(sql);
-            db.query(sql, (error, results) => {
-                if (error) {
-                    //throw error;
-                    responseObject.status = 400;
-                    responseObject.error = error;
-                    response.send(JSON.stringify(responseObject));
+        return;
+    }
+    
+    if(!results || !(typeof results === 'object') || !results.insertId || !(typeof results.insertId === 'number') ) {
+        responseObject.status = 400;
+        responseObject.error = 'Token not saved';
+        response.send(JSON.stringify(responseObject));
 
-                    return;
-                }
-                //console.log('The solution is: ', results);
+        return;
+    }
 
-                
-                responseObject.status = 200;
-                responseObject.data = { token: token };
-                response.send(JSON.stringify(responseObject));    
-            });
-            
-        } else {
-            responseObject.status = 400;
-            response.send(JSON.stringify(responseObject));    
-        }
-    });
+    responseObject.status = 200;
+    responseObject.data = { token: token };
+    response.send(JSON.stringify(responseObject));    
 };
 
-const maintenances = async(request, response) => {
+const maintenances = async (request, response) => {
     console.log(request.body);
     let responseObject = { ...defaultResponseObject };
 
     const userId = await token2userId(request.body.token);
-
-    db.query(`SELECT 
-                * 
+    console.log(`userId`, userId);
+    let sql = `SELECT 
+                    * 
                 FROM
                     \`users\`
                     INNER JOIN \`vehicles\` ON (\`vehicles\`.\`user_id\` = \`users\`.\`id\`)
                     INNER JOIN \`maintenances\` ON (\`maintenances\`.\`vehicle_id\` = \`vehicles\`.\`id\`)
-                WHERE \`users\`.\`id\` = ?`, [ userId ],(err, rows) => {
-        if(err) {
-            console.log('error: ', err);
-            responseObject.error = err;
-            response.send(JSON.stringify(responseObject));
+                WHERE \`users\`.\`id\` = ?`;
 
-            return;
-        }
-        console.log(`db SELECT - success`, rows);
-        responseObject.status = 200;
-        responseObject.data = rows;
+    let results;
+    try {
+        results = await db.query(sql, [ userId ]);
+    } catch(err) {
+
+        console.log('error: ', err);
+        responseObject.error = err;
         response.send(JSON.stringify(responseObject));
-    });
+
+        return;
+    }
+
+    console.log(`db SELECT - success`, results);
+    responseObject.status = 200;
+    responseObject.data = results;
+    response.send(JSON.stringify(responseObject));
 };
 
-const maintenanceAdd = (request, response) => {
+const maintenanceAdd = async (request, response) => {
     console.log(request.body);
     let responseObject = { ...defaultResponseObject };
 
@@ -180,20 +194,23 @@ const maintenanceAdd = (request, response) => {
         request.body.price,
         request.body.notes,
     ];
-    db.query(sql, data,(err, rows) => {
-        if(err) {
-            console.log('error: ', err);
-            responseObject.error = err;
-            response.send(JSON.stringify(responseObject));
 
-            return;
-        }
-        console.log(`db: `, rows);
-
-        responseObject.status = 200;
-        responseObject.data = { id: rows.insertId };
+    let result;
+    try {
+        result = await db.query(sql, data);
+    } catch(err) {
+        console.log('error: ', err);
+        responseObject.error = err;
         response.send(JSON.stringify(responseObject));
-    });
+
+        return;
+    }
+
+    console.log(`db: `, result);
+
+    responseObject.status = 200;
+    responseObject.data = { id: result.insertId };
+    response.send(JSON.stringify(responseObject));
 };
 
 const vehicles = async (request, response) => {
