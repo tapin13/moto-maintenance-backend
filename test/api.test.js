@@ -1,6 +1,6 @@
 const api = require('../libs/apilib');
 
-test('api', () => {
+test('hello', () => {
     const send = jest.fn();
     const res = {
         send,
@@ -10,3 +10,4 @@ test('api', () => {
     expect(send.mock.calls).toHaveLength(1);
     expect(send.mock.calls[0][0]).toEqual({ hello: 'Welcome to API' });
 });
+
