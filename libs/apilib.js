@@ -58,15 +58,21 @@ const register = async (request, response) => {
     let sql = `INSERT INTO \`users\` (\`email\`, \`password\`) VALUES (?, MD5(?))`;
     let data = [ `${requestObject.email}`, `${requestObject.password}${process.env.MD5_SALT}` ];
     console.log(sql, data);
+    let userId;
 
     try {
         let result = await db.query(sql, data);
         console.log(`result`, result);
+        userId = result.insertId;
 
         responseObject.status = 200;
     } catch (err) {
         responseObject.status = 400;
         responseObject.error = err;
+    }
+
+    if(userId) {
+        vehicleAdd({ userId: userId, title: '' });
     }
 
     response.send(JSON.stringify(responseObject));
@@ -208,6 +214,19 @@ const maintenanceAdd = async (request, response) => {
 
     console.log(`db: `, result);
 
+    sql = "UPDATE `vehicles` SET `distance` = ? WHERE `id` = ? AND `distance` < ?";
+    data = [
+        request.body.distance,
+        request.body.vehicleId,
+        request.body.distance,
+    ];
+
+    try {
+        await db.query(sql, data);
+    } catch (err) {
+        console.log('error: ', err);
+    }
+
     responseObject.status = 200;
     responseObject.data = { id: result.insertId };
     response.send(JSON.stringify(responseObject));
@@ -220,7 +239,7 @@ const vehicles = async (request, response) => {
     console.log(`post`, request.body.token);
     const userId = await token2userId(request.body.token);
 
-    let sql = "SELECT `id`, `title` FROM `vehicles` WHERE `user_id` = ? ;";
+    let sql = "SELECT `id`, `title`, `distance` FROM `vehicles` WHERE `user_id` = ? ;";
     let data = [ userId ];
     console.log(`data`, data);
 
@@ -241,6 +260,27 @@ const vehicles = async (request, response) => {
     responseObject.data = rows;
     response.send(JSON.stringify(responseObject));
 };
+
+const vehicleAdd = async (vehicle) => {
+    let sql = "INSERT INTO `vehicles` (`user_id`, `title`) VALUES (?,?);";
+    let data = [
+        vehicle.userId,
+        vehicle.title
+    ];
+    console.log('sql: ', sql);
+    console.log('data: ', data);
+    let result;
+
+    try {
+        result = await db.query(sql, data);
+    } catch(err) {
+        console.log('error: ', err);
+        return -1;
+    }
+
+    console.log(`db: `, result);
+    return result.id;
+}
 
 const dbDisconnect = () => {
     db.end();
