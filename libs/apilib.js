@@ -187,6 +187,40 @@ const maintenances = async (request, response) => {
     response.send(JSON.stringify(responseObject));
 };
 
+const record = async (request, response) => {
+    console.log(request.body);
+    let responseObject = { ...defaultResponseObject };
+
+    const userId = await token2userId(request.body.token);
+    const recordId = request.body.recordId;
+    console.log(`userId`, userId);
+    let sql = `SELECT 
+                    * 
+                FROM
+                    \`vehicles\`
+                    INNER JOIN \`maintenances\` ON (\`maintenances\`.\`vehicle_id\` = \`vehicles\`.\`id\`)
+                WHERE 
+                    \`vehicles\`.\`user_id\` = ?
+                    AND \`maintenances\`.\`id\` = ?
+                `;
+
+    let results;
+    try {
+        results = await db.query(sql, [ userId, recordId ]);
+    } catch(err) {
+        console.log('error: ', err);
+        responseObject.error = err;
+        response.send(JSON.stringify(responseObject));
+
+        return;
+    }
+
+    console.log(`db SELECT - success`, results);
+    responseObject.status = 200;
+    responseObject.data = results;
+    response.send(JSON.stringify(responseObject));
+};
+
 const maintenanceAdd = async (request, response) => {
     console.log(request.body);
     let responseObject = { ...defaultResponseObject };
@@ -292,6 +326,7 @@ module.exports = {
     register: register,
     login: login,
     maintenances: maintenances,
+    record: record,
     maintenanceAdd: maintenanceAdd,
     vehicles: vehicles,
 

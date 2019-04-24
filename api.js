@@ -19,6 +19,7 @@ app.get('/', api.hello);
 app.post('/api/register/', api.register);
 app.post('/api/login/', api.login);
 app.post('/api/maintenances/', api.maintenances);
+app.post('/api/record/', api.record);
 app.post('/api/maintenance/add/', api.maintenanceAdd);
 app.post('/api/vehicles/', api.vehicles);
 
